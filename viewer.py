@@ -177,7 +177,7 @@ class Viewer(QWidget):
 
 def run_viewer(display: str, fps: float = 15.0) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
-    app.setApplicationName("DesktopInDesktop")
+    app.setApplicationName("XFCE Workspace Viewer — hidden desktop")
     v = Viewer(display, fps)
     v.show()
     return app.exec_()

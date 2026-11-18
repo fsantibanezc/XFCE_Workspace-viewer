@@ -2,7 +2,7 @@
 
 Watch the windows on another XFCE workspace **live**, in a window on the workspace you're on.
 
-![Workspace View showing workspace 12 live](docs/demo.gif)
+![XFCE Workspace Viewer showing workspace 12 live](docs/demo.gif)
 
 Leave a build, a simulation, a terminal or a dashboard running on another workspace, then keep an eye on
 it from where you're working. The viewer shows every window on the chosen workspace in its real layout,
@@ -48,24 +48,25 @@ The installer checks the dependencies and installs for your user only. It doesn'
 
 | What | Where |
 | --- | --- |
-| Menu entry: **Applications → Accessories → Workspace View** | `~/.local/share/applications/workspace-view.desktop` |
-| `workspace-view` command | `~/.local/bin/workspace-view` |
-| Application files | `~/.local/share/desktopindesktop/` |
-| Icon | `~/.local/share/icons/hicolor/scalable/apps/workspace-view.svg` |
+| Menu entry: **Applications → Accessories → XFCE Workspace Viewer** | `~/.local/share/applications/xfce-workspace-viewer.desktop` |
+| `xfce-workspace-viewer` command | `~/.local/bin/xfce-workspace-viewer` |
+| Application files | `~/.local/share/xfce-workspace-viewer/` |
+| Icon | `~/.local/share/icons/hicolor/scalable/apps/xfce-workspace-viewer.svg` |
 
 To update, `git pull` and run `packaging/install.sh` again. To remove it, run `packaging/uninstall.sh`.
+If you installed an earlier version called "Workspace View", the installer removes it automatically.
 
-You can also run it without installing: `python3 wsview.py`.
+You can also run it without installing: `python3 xfce_workspace_viewer.py`.
 
 ## Usage
 
-Open **Workspace View** from the applications menu, or run it from a terminal:
+Open **XFCE Workspace Viewer** from the applications menu, or run it from a terminal:
 
 ```bash
-workspace-view                  # watch the first other workspace that has windows
-workspace-view --workspace 3    # watch workspace 3
-workspace-view --fps 10         # refresh rate, default 5 fps
-workspace-view --restore        # put back windows left parked after a crash
+xfce-workspace-viewer                 # watch the first other workspace that has windows
+xfce-workspace-viewer --workspace 3   # watch workspace 3
+xfce-workspace-viewer --fps 10        # refresh rate, default 5 fps
+xfce-workspace-viewer --restore       # put back windows left parked after a crash
 ```
 
 In the viewer:
@@ -88,7 +89,7 @@ second the view actually redraws; when nothing changes, it doesn't redraw.
 xfwm4 *unmaps* windows on workspaces you aren't looking at. They stop drawing entirely, so there's
 nothing to capture. To watch a workspace, the viewer **parks** its windows:
 
-1. It saves each window's workspace, geometry and state to `~/.cache/desktopindesktop/parked.json`.
+1. It saves each window's workspace, geometry and state to `~/.cache/xfce-workspace-viewer/parked.json`.
 2. It moves the window, while it's still hidden, to the bottom-right corner, where xfwm4 leaves only a few
    pixels on screen, under the panel.
 3. It makes the window *sticky* (on all workspaces) and hides it from the taskbar and pager, so it stays
@@ -104,7 +105,7 @@ The windows go back exactly where they were when:
 - you switch to the watched workspace yourself, so you can use the windows normally, or
 - you pick a different workspace in the viewer.
 
-If the viewer is ever killed hard, the saved state lets the next launch, or `workspace-view --restore`, or
+If the viewer is ever killed hard, the saved state lets the next launch, or `xfce-workspace-viewer --restore`, or
 the menu entry's right-click action **Restore parked windows**, put everything back.
 
 ## Known limitations
@@ -132,7 +133,7 @@ python3 did.py stop
 
 | File | Purpose |
 | --- | --- |
-| `wsview.py` | Workspace View app: parking, capture loop, Qt UI |
+| `xfce_workspace_viewer.py` | Main app: parking, capture loop, Qt UI |
 | `x11util.py` | ctypes bindings to libX11, XComposite, MIT-SHM and XDamage |
 | `packaging/` | Installer, uninstaller, icon |
 | `did.py`, `viewer.py` | Hidden Xvfb desktop and its viewer |

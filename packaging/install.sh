@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Installs Workspace View for the current user and adds it to the XFCE (freedesktop) application menu.
+# Installs XFCE Workspace Viewer for the current user and adds it to the XFCE (freedesktop) application menu.
 set -euo pipefail
 
+SLUG=xfce-workspace-viewer
+NAME="XFCE Workspace Viewer"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$HOME/.local/share/desktopindesktop"
+APP_DIR="$HOME/.local/share/$SLUG"
 BIN_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
@@ -22,42 +24,54 @@ if ((${#missing[@]})); then
   exit 1
 fi
 
+# --- remove a pre-rename install ("Workspace View"), if present ------------------------
+OLD_APP_DIR="$HOME/.local/share/desktopindesktop"
+if [ -f "$OLD_APP_DIR/wsview.py" ]; then
+  "$PY" "$OLD_APP_DIR/wsview.py" --restore >/dev/null 2>&1 || true
+fi
+rm -f "$BIN_DIR/workspace-view" "$DESKTOP_DIR/workspace-view.desktop" "$ICON_DIR/workspace-view.svg"
+rm -f "$OLD_APP_DIR"/{wsview.py,x11util.py,viewer.py,did.py}
+rm -rf "$OLD_APP_DIR/__pycache__"
+rmdir "$OLD_APP_DIR" 2>/dev/null || true
+
 # --- files -----------------------------------------------------------------------------
 mkdir -p "$APP_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
+rm -rf "$APP_DIR/__pycache__"
 install -m 644 "$SRC"/x11util.py "$SRC"/viewer.py "$APP_DIR"/
-install -m 755 "$SRC"/wsview.py "$SRC"/did.py "$APP_DIR"/
-install -m 644 "$SRC"/packaging/workspace-view.svg "$ICON_DIR"/workspace-view.svg
+install -m 755 "$SRC"/xfce_workspace_viewer.py "$SRC"/did.py "$APP_DIR"/
+install -m 644 "$SRC/packaging/$SLUG.svg" "$ICON_DIR/$SLUG.svg"
 
-cat > "$BIN_DIR/workspace-view" <<SH
+cat > "$BIN_DIR/$SLUG" <<SH
 #!/bin/sh
-exec $PY "$APP_DIR/wsview.py" "\$@"
+exec $PY "$APP_DIR/xfce_workspace_viewer.py" "\$@"
 SH
-chmod 755 "$BIN_DIR/workspace-view"
+chmod 755 "$BIN_DIR/$SLUG"
 
-cat > "$DESKTOP_DIR/workspace-view.desktop" <<DESK
+cat > "$DESKTOP_DIR/$SLUG.desktop" <<DESK
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Workspace View
+Name=$NAME
 GenericName=Live workspace viewer
 Comment=Watch the windows on another workspace live, in a window
-Exec=$BIN_DIR/workspace-view
-Icon=workspace-view
+Exec=$BIN_DIR/$SLUG
+Icon=$SLUG
 Terminal=false
 Categories=Utility;
-Keywords=workspace;desktop;virtual;live;view;monitor;windows;
+Keywords=workspace;desktop;virtual;live;view;monitor;windows;xfce;
 StartupNotify=false
+StartupWMClass=xfce_workspace_viewer.py
 Actions=restore;
 
 [Desktop Action restore]
 Name=Restore parked windows
-Exec=$BIN_DIR/workspace-view --restore
+Exec=$BIN_DIR/$SLUG --restore
 DESK
 
 update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
 gtk-update-icon-cache -q -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 
-echo "Installed Workspace View:"
-echo "  menu:    Applications → Accessories → Workspace View"
-echo "  command: workspace-view [--workspace N] [--fps 5] | workspace-view --restore"
+echo "Installed $NAME:"
+echo "  menu:    Applications → Accessories → $NAME"
+echo "  command: $SLUG [--workspace N] [--fps 5] | $SLUG --restore"
 echo "  files:   $APP_DIR"

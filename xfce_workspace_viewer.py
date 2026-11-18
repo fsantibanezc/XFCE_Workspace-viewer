@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Live, view-only window onto another XFCE workspace.
+"""XFCE Workspace Viewer: a live, view-only window onto another XFCE workspace.
 
 xfwm4 does not draw windows on workspaces you are not looking at (it unmaps them). To watch them live,
 this tool temporarily "parks" the target workspace's windows: makes them sticky and hidden from the
 taskbar/pager, and moves them under the bottom-right corner of the panel, where they stay mapped and the
 compositor keeps rendering them. Their pixels are captured with MIT-SHM and drawn at their original
 positions. Switching to the target workspace, choosing another one, or closing the viewer puts every
-window back exactly where it was. If the viewer ever dies, run:  python wsview.py --restore
+window back exactly where it was. If the viewer ever dies, run:  python xfce_workspace_viewer.py --restore
 
-    python wsview.py [--workspace N] [--fps 5]
-    python wsview.py --restore
+    xfce-workspace-viewer [--workspace N] [--fps 5]
+    xfce-workspace-viewer --restore
 """
 import argparse
 import json
@@ -28,7 +28,9 @@ from PyQt5.QtWidgets import (QApplication, QButtonGroup, QGridLayout, QHBoxLayou
 
 from x11util import DamageTracker, X11, ShmCapture
 
-STATE_FILE = Path.home() / ".cache" / "desktopindesktop" / "parked.json"
+APP_NAME = "XFCE Workspace Viewer"
+STATE_FILE = Path.home() / ".cache" / "xfce-workspace-viewer" / "parked.json"
+LEGACY_STATE_FILE = Path.home() / ".cache" / "desktopindesktop" / "parked.json"  # pre-rename versions
 STICKY = 0xFFFFFFFF
 SKIP_TYPES = {"_NET_WM_WINDOW_TYPE_DOCK", "_NET_WM_WINDOW_TYPE_DESKTOP", "_NET_WM_WINDOW_TYPE_NOTIFICATION",
               "_NET_WM_WINDOW_TYPE_TOOLTIP", "_NET_WM_WINDOW_TYPE_POPUP_MENU",
@@ -122,6 +124,16 @@ class Parker:
 
 
 def restore_leftovers(display: str) -> int:
+    if LEGACY_STATE_FILE.exists():  # carry over windows parked by a pre-rename version
+        try:
+            old = json.loads(LEGACY_STATE_FILE.read_text() or "{}")
+            if old:
+                STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                cur = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+                STATE_FILE.write_text(json.dumps({**old, **cur}, indent=1))
+            LEGACY_STATE_FILE.unlink()
+        except (OSError, ValueError):
+            pass
     x = X11(display)
     p = Parker(x, display)
     n = len(p.records)
@@ -365,7 +377,7 @@ class Viewer(QWidget):
 
     def __init__(self, display: str, target: int, fps: float):
         super().__init__()
-        self.setWindowTitle("Workspace View")
+        self.setWindowTitle(APP_NAME)
         self.resize(1400, 860)
         self.target = target
         self._stamps = []
@@ -470,7 +482,7 @@ class Viewer(QWidget):
             b.setToolTip(f"Workspace {names[i]}: {c} window{'s' * (c != 1)}"
                          + ("  (you are here)" if i == cur else ""))
         if self.target < len(names):
-            self.setWindowTitle(f"Workspace View — {names[self.target]}")
+            self.setWindowTitle(f"{APP_NAME} — {names[self.target]}")
 
     def _on_frame(self, data):
         self.canvas.data = data
@@ -535,7 +547,7 @@ def main() -> int:
     x.close()
 
     app = QApplication(sys.argv[:1])
-    app.setApplicationName("Workspace View")
+    app.setApplicationName(APP_NAME)
     v = Viewer(display, target, args.fps)
     app.aboutToQuit.connect(v.shutdown)
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DesktopInDesktop: run a hidden, always-rendered virtual X desktop and watch it live.
+"""Hidden desktop (part of XFCE Workspace Viewer): run an always-rendered virtual X desktop and watch it live.
 
     did.py start [--display :99] [--size 1920x1080] [--wm]
     did.py run   [--display :99] -- <command...>
@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-STATE_DIR = Path.home() / ".cache" / "desktopindesktop"
+STATE_DIR = Path.home() / ".cache" / "xfce-workspace-viewer" / "hidden-desktop"
 DEFAULT_DISPLAY = ":99"
 
 
