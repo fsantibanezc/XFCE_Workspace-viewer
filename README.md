@@ -15,11 +15,14 @@ updating as it changes. It is view-only, so nothing you do in the viewer reaches
 - Workspace picker: a grid of numbered buttons, two rows of six for 12 workspaces.
 - Low CPU use. XDamage means only windows whose contents changed are recaptured, and the capture itself
   uses shared memory (MIT-SHM) and the compositor's off-screen pixmaps.
+- **Pause / Resume** button (or `P` / `Space`) freezes the view and stops capturing, without closing the app.
 - Double-click a window in the view to jump to it.
 - Safe: every window goes back exactly where it was (workspace, position, size, maximized or fullscreen),
   even if the viewer crashes.
 
 ![Toolbar](docs/toolbar.png)
+
+![Toolbar while paused](docs/toolbar-paused.png)
 
 ## Requirements
 
@@ -75,14 +78,20 @@ In the viewer:
 | --- | --- |
 | Number buttons | Pick the workspace to watch. The **pressed** button is the one shown, the **bold** one is where you are, and hovering shows its window count. |
 | fps box | Change the refresh rate while it runs. |
+| **Pause** / **Resume** | Freeze the view on its last frame and stop capturing, then pick up live again. A *Paused* badge shows on the view. |
 | **Go to workspace** | Switch to the workspace you're watching. |
 | Double-click a window | Jump to that window. |
+| `P` or `Space` | Pause or resume. |
 | `F` | Toggle fullscreen. |
 | `T` | Toggle always on top. |
 | `Q` | Quit. |
 
 The status line shows how many windows are parked. The counter on the right shows how many times per
 second the view actually redraws; when nothing changes, it doesn't redraw.
+
+While paused, the viewer uses almost no CPU. Parked windows stay parked, so resuming is instant, but
+switching to the watched workspace yourself still brings its windows back. If you resize the viewer or pick
+another workspace while paused, it captures a single new frame so the view stays accurate.
 
 ## How it works
 

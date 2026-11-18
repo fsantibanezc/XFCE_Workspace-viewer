@@ -23,7 +23,7 @@ from pathlib import Path
 from PyQt5.QtCore import QObject, QRect, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QColor, QFont, QImage, QPainter
 from PyQt5.QtWidgets import (QApplication, QButtonGroup, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-                             QSizePolicy, QSpinBox,
+                             QSizePolicy, QSpinBox, QStyle,
                              QVBoxLayout, QWidget)
 
 from x11util import DamageTracker, X11, ShmCapture
@@ -155,6 +155,8 @@ class Worker(QObject):
         self.display, self.target, self.own_pid = display, target, own_pid
         self.view_w, self.view_h = 1280, 720
         self.fps = 5.0
+        self.paused = False
+        self.force_frame = False   # while paused: capture one frame (after resize / workspace change)
 
     @pyqtSlot()
     def setup(self):
@@ -175,9 +177,15 @@ class Worker(QObject):
         self.fps = fps
         self.timer.start(int(1000 / fps))
 
+    @pyqtSlot(bool)
+    def set_paused(self, paused):
+        self.paused = paused
+        self.last_list = 0.0  # refresh the status line right away
+
     @pyqtSlot(int, int)
     def set_view(self, w, h):
         self.view_w, self.view_h = max(1, w), max(1, h)
+        self.force_frame = True
         if hasattr(self, "cache"):
             self.cache.clear()
             self.last_bg = 0.0
@@ -188,6 +196,8 @@ class Worker(QObject):
             self.target = t
             self.parker.restore_all()
             self.last_list = 0.0
+            self.force_frame = True
+            self.last_bg = 0.0
 
     @pyqtSlot()
     def shutdown(self):
@@ -242,7 +252,8 @@ class Worker(QObject):
             if self.parker.records:  # user is looking at it: give the windows back
                 self.parker.restore_all()
                 self.windows = self.x.windows()
-            self.status.emit("You are on this workspace — showing it directly")
+            self.status.emit(("Paused · " if self.paused else "")
+                             + "You are on this workspace — showing it directly")
             return
         to_park = [(o, w) for o, w, rec in self._members(self.windows) if rec is None and not w.viewable]
         for order, w in to_park:
@@ -252,7 +263,8 @@ class Worker(QObject):
             time.sleep(0.05)
             self.windows = self.x.windows()
         n = len(self.parker.records)
-        self.status.emit(f"Watching live · {n} window{'s' * (n != 1)} parked")
+        mode = "Paused" if self.paused else "Watching live"
+        self.status.emit(f"{mode} · {n} window{'s' * (n != 1)} parked")
 
     # --- main loop --------------------------------------------------------------
     @pyqtSlot()
@@ -263,6 +275,12 @@ class Worker(QObject):
                 self._refresh(now)
         except Exception as e:  # keep running; report
             self.status.emit(f"error: {e}")
+
+        # Paused: keep the housekeeping above (restoring windows when you visit the workspace, closed
+        # windows, workspace counts) but skip capturing, except one frame after a resize/workspace change.
+        if self.paused and not self.force_frame:
+            return
+        self.force_frame = False
 
         sw, sh = self.x.screen_size()
         s = min(self.view_w / sw, self.view_h / sh)
@@ -317,6 +335,7 @@ class Canvas(QWidget):
         super().__init__()
         self.data = None
         self.message = "starting…"
+        self.paused = False
         self.setAttribute(Qt.WA_OpaquePaintEvent)
         self.setMinimumSize(320, 180)
         self.setMouseTracking(True)
@@ -348,6 +367,18 @@ class Canvas(QWidget):
             p.setPen(QColor(230, 230, 235))
             f = QFont(); f.setPointSize(14); p.setFont(f)
             p.drawText(QRect(ox, oy, cw, ch), Qt.AlignCenter, "No windows on this workspace")
+        if self.paused:
+            p.setClipping(False)
+            f = QFont(); f.setPointSize(11); f.setBold(True); p.setFont(f)
+            text = "❚❚  Paused"
+            tw = p.fontMetrics().horizontalAdvance(text) + 24
+            badge = QRect(self.width() - tw - 12, 12, tw, 30)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(0, 0, 0, 170))
+            p.drawRoundedRect(badge, 8, 8)
+            p.setPen(QColor(255, 255, 255))
+            p.drawText(badge, Qt.AlignCenter, text)
 
     def _hit(self, pos):
         if not self.data:
@@ -370,6 +401,7 @@ class Canvas(QWidget):
 
 class Viewer(QWidget):
     req_fps = pyqtSignal(float)
+    req_paused = pyqtSignal(bool)
     req_view = pyqtSignal(int, int)
     req_target = pyqtSignal(int)
     req_activate = pyqtSignal(int)
@@ -395,6 +427,12 @@ class Viewer(QWidget):
         self.fps_box.setValue(int(fps))
         self.fps_box.setSuffix(" fps")
         self.fps_box.valueChanged.connect(lambda v: self.req_fps.emit(float(v)))
+        self.pause_btn = QPushButton()
+        self.pause_btn.setCheckable(True)
+        self.pause_btn.setFocusPolicy(Qt.NoFocus)
+        self.pause_btn.setToolTip("Pause / resume refreshing the view (P or Space)")
+        self.pause_btn.toggled.connect(self._set_paused)
+        self._style_pause_btn(False)
         go = QPushButton("Go to workspace")
         go.clicked.connect(lambda: subprocess.run(["wmctrl", "-s", str(self.target)]))
         self.status = QLabel("")
@@ -407,6 +445,7 @@ class Viewer(QWidget):
         bar.addLayout(self.ws_grid)
         bar.addSpacing(8)
         bar.addWidget(self.fps_box)
+        bar.addWidget(self.pause_btn)
         bar.addWidget(go)
         bar.addSpacing(12)
         bar.addWidget(self.status, 1)
@@ -428,6 +467,7 @@ class Viewer(QWidget):
         self.worker.desktops.connect(self._on_desktops)
         self.worker.status.connect(self.status.setText)
         self.req_fps.connect(self.worker.set_fps)
+        self.req_paused.connect(self.worker.set_paused)
         self.req_view.connect(self.worker.set_view)
         self.req_target.connect(self.worker.set_target)
         self.req_activate.connect(self.worker.activate)
@@ -494,9 +534,22 @@ class Viewer(QWidget):
         self._stamps = [t for t in self._stamps if now - t < 1.0]
         self.rate.setText(f"{len(self._stamps)} updates/s")
 
+    def _style_pause_btn(self, paused):
+        icon = QStyle.SP_MediaPlay if paused else QStyle.SP_MediaPause
+        self.pause_btn.setIcon(self.style().standardIcon(icon))
+        self.pause_btn.setText("Resume" if paused else "Pause")
+
+    def _set_paused(self, paused):
+        self._style_pause_btn(paused)
+        self.canvas.paused = paused
+        self.canvas.update()
+        self.req_paused.emit(paused)
+
     def keyPressEvent(self, ev):
         k = ev.key()
-        if k == Qt.Key_F:
+        if k in (Qt.Key_P, Qt.Key_Space):
+            self.pause_btn.toggle()
+        elif k == Qt.Key_F:
             self.showNormal() if self.isFullScreen() else self.showFullScreen()
         elif k == Qt.Key_Escape and self.isFullScreen():
             self.showNormal()
